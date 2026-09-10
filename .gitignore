@@ -1,0 +1,14 @@
+# Ambiente virtual Python (não deve ser versionado)
+.venv/
+
+# Cache de bytecode do Python
+__pycache__/
+*.pyc
+
+# Backups gerados durante a refatoração
+*.bak
+
+# Pastas de processo geradas pela automação (PDFs/JPGs com dados reais
+# de processos do SEI/SIGEF - não devem ir para o controle de versão).
+# Ajuste/adicione o nome da pasta de cada processo aqui se necessário.
+0029.002128-2026-37/
