@@ -3,9 +3,13 @@ Orquestra o fluxo completo de regularização, na ordem:
 
     SEI(1) -> CE -> NL -> PP -> OB -> SEI(2)
 
-Hoje só as etapas SEI(1) e CE estão implementadas; as demais (NL, PP, OB,
-SEI(2)) ainda serão implementadas e por enquanto são apenas puladas (com
-aviso) para não travar o fluxo durante os testes.
+Cada etapa alimenta a próxima com a variável que ela gera (CE alimenta
+NL, NL alimenta PP, PP alimenta OB), além de todo mundo reaproveitar os
+dados coletados no SEI(1). Hoje SEI(1), CE, NL e PP já estão
+implementadas; OB e SEI(2) ainda serão implementadas e por enquanto são
+apenas puladas (com aviso) para não travar o fluxo durante os testes —
+quando uma etapa é pulada, a próxima recebe None no lugar do valor que
+viria dela.
 """
 from utils import conectar_chrome
 from etapa_sei1 import executar_sei1
@@ -29,18 +33,32 @@ def main() -> None:
         # ===== CE =====
         ce, arquivos_jpg = executar_ce(context, processo, dados)
 
-        # ===== NL, PP, OB, SEI(2) - ainda a implementar =====
-        etapas_restantes = (
-            ("NL", executar_nl, (context, dados)),
-            ("PP", executar_pp, (context, dados)),
-            ("OB", executar_ob, (context, dados)),
-            ("SEI(2)", executar_sei2, (aba_sei, dados, arquivos_jpg)),
-        )
-        for nome_etapa, funcao_etapa, argumentos in etapas_restantes:
-            try:
-                funcao_etapa(*argumentos)
-            except NotImplementedError as erro:
-                print(f"⚠️  Pulando etapa {nome_etapa}: {erro}")
+        # ===== NL (usa o CE gerado na Etapa CE) =====
+        nl = None
+        try:
+            nl = executar_nl(context, ce, dados["valor_padronizado"], dados)
+        except NotImplementedError as erro:
+            print(f"⚠️  Pulando etapa NL: {erro}")
+
+        # ===== PP (usa a NL e o CE, e a conta PP coletada no SEI(1)) =====
+        pp = None
+        try:
+            pp = executar_pp(context, nl, ce, dados["conta_pp"], dados)
+        except NotImplementedError as erro:
+            print(f"⚠️  Pulando etapa PP: {erro}")
+
+        # ===== OB (usa a PP gerada na Etapa PP) =====
+        ob = None
+        try:
+            ob = executar_ob(context, pp, dados)
+        except NotImplementedError as erro:
+            print(f"⚠️  Pulando etapa OB: {erro}")
+
+        # ===== SEI (2) (anexa os documentos gerados de volta ao processo) =====
+        try:
+            executar_sei2(aba_sei, dados, arquivos_jpg)
+        except NotImplementedError as erro:
+            print(f"⚠️  Pulando etapa SEI(2): {erro}")
 
     finally:
         playwright.stop()

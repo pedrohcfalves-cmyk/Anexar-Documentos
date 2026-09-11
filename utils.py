@@ -2,6 +2,7 @@
 Funções e constantes utilitárias compartilhadas entre as etapas do fluxo
 SEI/SIGEF (SEI(1) -> CE -> NL -> PP -> OB -> SEI(2)).
 """
+import json
 import os
 
 import pymupdf
@@ -28,19 +29,28 @@ URL_SEI = (
 
 PASTA_BASE = r"C:\Users\04789010201\Downloads\Anexar Documentos"
 
+# Arquivo onde ficam guardados os últimos valores digitados (processo,
+# dados do SEI, CE, etc.), pra não precisar redigitar tudo de novo toda
+# vez que for testar uma etapa separada. Fica na mesma pasta do projeto.
+CAMINHO_SESSAO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sessao_atual.json")
 
-def conectar_chrome(porta: int = 9222):
+
+def conectar_chrome(porta: int = 9222, timeout_ms: int = 15000):
     """
     Conecta ao Chrome aberto em modo de depuração (CDP) e retorna o
     objeto playwright (para poder chamar .stop() no final), o browser e o
     primeiro contexto disponível.
 
     Lança Exception com instruções caso o Chrome não esteja aberto na
-    porta de depuração.
+    porta de depuração. Por padrão desiste depois de 15s (em vez do
+    padrão do Playwright, que pode levar minutos) pra não parecer que o
+    script travou quando o Chrome simplesmente não está aberto.
     """
     playwright = sync_playwright().start()
     try:
-        browser = playwright.chromium.connect_over_cdp(f"http://127.0.0.1:{porta}")
+        browser = playwright.chromium.connect_over_cdp(
+            f"http://127.0.0.1:{porta}", timeout=timeout_ms
+        )
     except Exception:
         playwright.stop()
         raise Exception(
@@ -113,3 +123,43 @@ def confirmar(mensagem: str = "Você tem certeza? (S/N): ") -> bool:
         if resposta in ("S", "N"):
             return resposta == "S"
         print("⚠️  Digite apenas S ou N.\n")
+
+
+def carregar_sessao() -> dict:
+    """
+    Lê o arquivo de sessão (CAMINHO_SESSAO) com os últimos valores usados
+    (processo, dados do SEI, CE, etc.). Retorna um dict vazio se o
+    arquivo ainda não existir ou estiver corrompido.
+    """
+    if not os.path.exists(CAMINHO_SESSAO):
+        return {}
+    try:
+        with open(CAMINHO_SESSAO, "r", encoding="utf-8") as arquivo:
+            return json.load(arquivo)
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def salvar_sessao(**novos_valores) -> None:
+    """
+    Atualiza o arquivo de sessão com os valores passados, mesclando com o
+    que já estava salvo (não apaga o resto). Ex: salvar_sessao(ce=ce)
+    guarda só o CE, mantendo processo/dados que já estavam salvos.
+    """
+    sessao = carregar_sessao()
+    sessao.update(novos_valores)
+    with open(CAMINHO_SESSAO, "w", encoding="utf-8") as arquivo:
+        json.dump(sessao, arquivo, ensure_ascii=False, indent=2)
+
+
+def perguntar_ou_reusar(mensagem: str, chave: str, sessao: dict) -> str:
+    """
+    Pergunta um valor ao usuário, oferecendo o valor salvo na sessão (se
+    houver) como padrão. Basta apertar Enter pra reaproveitar o valor
+    salvo, ou digitar um valor novo pra sobrescrevê-lo.
+    """
+    valor_salvo = sessao.get(chave)
+    if valor_salvo:
+        resposta = input(f"{mensagem} [Enter para manter '{valor_salvo}']: ").strip()
+        return resposta if resposta else str(valor_salvo)
+    return input(f"{mensagem}: ").strip()

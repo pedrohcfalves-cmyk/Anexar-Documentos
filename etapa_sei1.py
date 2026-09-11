@@ -5,7 +5,14 @@ etapas (CE, NL, PP, OB, SEI(2)).
 """
 from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
 
-from utils import URL_SEI, confirmar, obter_ou_criar_aba
+from utils import (
+    URL_SEI,
+    carregar_sessao,
+    confirmar,
+    obter_ou_criar_aba,
+    perguntar_ou_reusar,
+    salvar_sessao,
+)
 
 
 def abrir_processo_sei(aba_sei: Page, processo: str, timeout_ms: int = 15000) -> None:
@@ -52,21 +59,44 @@ def coletar_dados_sigef() -> dict:
     Esses dados são coletados aqui, na etapa do SEI (é lá que o operador
     consulta o processo para obter os valores), e depois são reutilizados
     em todas as etapas seguintes do SIGEF, sem precisar perguntar de novo.
+
+    Cada pergunta já oferece o último valor salvo (arquivo de sessão)
+    como padrão — aperte Enter pra reaproveitar, ou digite um valor novo
+    pra trocar. No final, os valores confirmados são salvos de novo na
+    sessão (sobrescrevendo os anteriores) para uso nas próximas etapas.
     """
+    sessao = carregar_sessao()
+
     while True:
         print("=" * 50)
         print("  Coloque as informações a baixo para preencher o sistema do sigef")
         print("=" * 50)
 
-        valor = input("Digite o valor Total da Parcela: ").strip()
-        cnpj_cpf = input("Digite o CNPJ/CPF: ").strip()
-        municipio = input("Digite o nome do município: ").strip()
-        escola = input("Digite o nome da escola: ").strip()
-        conta_pp = input("Digite a conta PP: ").strip()
-        conta_ob = input("Digite a conta OB: ").strip()
-        parcela = input("Digite a parcela: ").strip()
-        mes_referencia = input("Digite o mês de referência (1-12): ").strip()
-        programa = input("Digite o programa: ").strip()
+        valor = perguntar_ou_reusar("Digite o valor Total da Parcela", "valor", sessao)
+        cnpj_cpf = perguntar_ou_reusar("Digite o CNPJ/CPF", "cnpj_cpf", sessao)
+        municipio = perguntar_ou_reusar("Digite o nome do município", "municipio", sessao)
+        escola = perguntar_ou_reusar("Digite o nome da escola", "escola", sessao)
+        conta_pp = perguntar_ou_reusar("Digite a conta PP", "conta_pp", sessao)
+        conta_ob = perguntar_ou_reusar("Digite a conta OB", "conta_ob", sessao)
+        parcela = perguntar_ou_reusar("Digite a parcela", "parcela", sessao)
+        mes_referencia = perguntar_ou_reusar("Digite o mês de referência (1-12)", "mes_referencia", sessao)
+        programa = perguntar_ou_reusar("Digite o programa", "programa", sessao)
+
+        # Atualiza os padrões usados acima, pro caso de o usuário responder
+        # N e a coleta rodar de novo (reaproveita o que acabou de digitar).
+        sessao.update(
+            {
+                "valor": valor,
+                "cnpj_cpf": cnpj_cpf,
+                "municipio": municipio,
+                "escola": escola,
+                "conta_pp": conta_pp,
+                "conta_ob": conta_ob,
+                "parcela": parcela,
+                "mes_referencia": mes_referencia,
+                "programa": programa,
+            }
+        )
 
         print("-" * 50)
         print(f"Valor Total da Parcela : {valor}")
@@ -84,7 +114,7 @@ def coletar_dados_sigef() -> dict:
             break
         print("\n🔄 Ok, vamos preencher novamente.\n")
 
-    return {
+    dados = {
         "valor": valor,
         "valor_padronizado": valor.replace(".", "").replace(",", ""),  # 7.878,75 -> 787875
         "cnpj_cpf": cnpj_cpf,
@@ -96,6 +126,8 @@ def coletar_dados_sigef() -> dict:
         "mes_referencia": mes_referencia,
         "programa": programa,
     }
+    salvar_sessao(**dados)
+    return dados
 
 
 def executar_sei1(context, processo: str = None) -> tuple[Page, str, dict]:
@@ -116,9 +148,11 @@ def executar_sei1(context, processo: str = None) -> tuple[Page, str, dict]:
     aba_sei.bring_to_front()
 
     if processo is None:
-        processo = input("Digite o processo do SEI: ").strip()
+        sessao = carregar_sessao()
+        processo = perguntar_ou_reusar("Digite o processo do SEI", "processo", sessao)
 
     abrir_processo_sei(aba_sei, processo)
+    salvar_sessao(processo=processo)
 
     dados = coletar_dados_sigef()
 

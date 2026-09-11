@@ -12,3 +12,10 @@ __pycache__/
 # de processos do SEI/SIGEF - não devem ir para o controle de versão).
 # Ajuste/adicione o nome da pasta de cada processo aqui se necessário.
 0029.002128-2026-37/
+
+gags/
+
+# Últimos valores digitados (processo, dados do SEI, CE, NL...), salvos
+# automaticamente pra facilitar testes isolados de cada etapa. Contém
+# dados reais (CNPJ, valores etc.) - não deve ir para o controle de versão.
+sessao_atual.json

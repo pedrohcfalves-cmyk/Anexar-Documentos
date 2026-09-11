@@ -15,9 +15,11 @@ from utils import (
     URL_SIGEF,
     URL_SIGEF_LISTAR_DESPESA_CERTIFICADA,
     PASTA_BASE,
+    carregar_sessao,
     nome_pasta_valido,
     obter_ou_criar_aba,
     pdf_para_jpg,
+    salvar_sessao,
 )
 
 
@@ -62,7 +64,7 @@ def preencher_despesa_certificada(aba_sigef, context, dados: dict, processo: str
         f"Regularização da {dados['parcela']} do {programa} Em favor de "
         f"{dados['escola']}, localizado no município de {dados['municipio']}, "
         f"referente ao processo {processo}."
-    )  # {programa} Deve ser substituido pelo nome da planilha, para se adequar ao programa
+    )
 
     with context.expect_page() as nova_pagina_info:
         aba_sigef.locator("#txtNmCredor_BtnPesquisa").click()
@@ -141,6 +143,7 @@ def executar_ce(context, processo: str, dados: dict, pasta_base: str = PASTA_BAS
 
     ce = preencher_despesa_certificada(aba_sigef, context, dados, processo)
     print(ce)
+    salvar_sessao(ce=ce)
 
     arquivos_jpg = baixar_e_converter_relatorio(aba_sigef, context, ce, processo, pasta_base)
     print("JPG pronto em:", arquivos_jpg)
@@ -154,11 +157,14 @@ if __name__ == "__main__":
     # (que normalmente vêm do SEI(1)) são coletados aqui na hora, chamando
     # a mesma função que o SEI(1) usa.
     from etapa_sei1 import coletar_dados_sigef
-    from utils import conectar_chrome
+    from utils import carregar_sessao, conectar_chrome, perguntar_ou_reusar
 
     playwright, browser, context = conectar_chrome()
     try:
-        processo = input("Digite o processo do SEI (para nomear a pasta): ").strip()
+        sessao = carregar_sessao()
+        processo = perguntar_ou_reusar(
+            "Digite o processo do SEI (para nomear a pasta)", "processo", sessao
+        )
         dados = coletar_dados_sigef()
         ce, arquivos_jpg = executar_ce(context, processo, dados)
         print(f"OK: CE '{ce}' processado, arquivos: {arquivos_jpg}")
