@@ -76,6 +76,15 @@ def preencher_despesa_certificada(aba_sigef, context, dados: dict, processo: str
     nova_pagina.locator("#btnConfirmar").click()
     nova_pagina.locator("td.GridLink[onclick*='SelecionarItem']").first.click()
 
+    # Fecha a aba de busca do credor -- ela já cumpriu seu papel (selecionar
+    # o item) e, se não for fechada, fica acumulando abas no Chrome a cada
+    # execução, o que deixa a próxima conexão (connect_over_cdp) cada vez
+    # mais lenta até estourar o timeout.
+    try:
+        nova_pagina.close()
+    except Exception:
+        pass
+
     return incluir_documento_sigef(aba_sigef, dados["valor_padronizado"])
 
 
@@ -112,6 +121,15 @@ def baixar_e_converter_relatorio(
         nova_pagina1.locator('img[alt="Imprime Arquivo Formato PostScript (.pdf)"]').click()
 
     download = download_info.value
+
+    # Fecha as abas de detalhe e de relatório -- já cumpriram seu papel
+    # (gerar e baixar o PDF) e, se não forem fechadas, ficam acumulando
+    # abas no Chrome a cada execução.
+    for pagina_temp in (nova_pagina1, nova_pagina):
+        try:
+            pagina_temp.close()
+        except Exception:
+            pass
 
     pasta_destino = os.path.join(pasta_base, nome_pasta_valido(processo))
     os.makedirs(pasta_destino, exist_ok=True)

@@ -27,8 +27,9 @@ def executar_nl(context, ce: str, valor_padronizado: str, dados: dict = None) ->
     lançamento pelo número `ce` e gerando a NL para o `valor_padronizado`
     informado.
 
-    Retorna o número da NL gerada (ou None se não encontrar), para ser
-    repassado à Etapa PP, que precisa dele.
+    Retorna o número da NL gerada (só o número, sem o prefixo "2026NL"),
+    ou None se não encontrar, para ser repassado à Etapa PP, que precisa
+    dele.
     """
     aba_sigef = obter_ou_criar_aba(
         context,
@@ -60,6 +61,14 @@ def executar_nl(context, ce: str, valor_padronizado: str, dados: dict = None) ->
     nova_pagina.locator("#btnConfirmar").click()
     nova_pagina.locator("td.GridLink[onclick*='SelecionarItem']").first.click()
 
+    # Fecha a aba de busca da nota de empenho -- ela já cumpriu seu papel
+    # (selecionar o item) e, se não for fechada, fica acumulando abas no
+    # Chrome a cada execução.
+    try:
+        nova_pagina.close()
+    except Exception:
+        pass
+
     aba_sigef.bring_to_front()
 
     aba_sigef.locator("#txtValorBrutoId").press_sequentially(valor_padronizado)
@@ -76,11 +85,20 @@ def executar_nl(context, ce: str, valor_padronizado: str, dados: dict = None) ->
 
     for i in range(total):
         linha = linhas.nth(i)
-        valor_liquido = linha.locator("td").nth(7).text_content().strip()
+        # ":scope > td" pega só os <td> que são filhos diretos da <tr> --
+        # a coluna "Unidade Gestora / Gestão" tem uma tabela aninhada
+        # dentro da célula, com seus próprios <td>. Um "td" comum (sem
+        # :scope >) pega esses <td> aninhados também, o que desloca a
+        # contagem e faz o .nth(N) apontar pra célula errada.
+        celulas = linha.locator(":scope > td")
+        valor_liquido = celulas.nth(7).text_content().strip()
         valor_liquido_padronizado = valor_liquido.replace(".", "").replace(",", "")
 
         if valor_liquido_padronizado == valor_padronizado:
-            nl = linha.locator("td").nth(5).text_content().strip()
+            nl_bruto = celulas.nth(5).text_content().strip()
+            # A célula vem como "2026NL066210" -- guardamos só o número
+            # depois do "NL" (ex: "066210").
+            nl = nl_bruto.split("NL")[-1] if "NL" in nl_bruto else nl_bruto
             valor_encontrado = valor_liquido
             break  # achou a linha certa, para de procurar
 

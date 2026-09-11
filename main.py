@@ -47,10 +47,10 @@ def main() -> None:
         except NotImplementedError as erro:
             print(f"⚠️  Pulando etapa PP: {erro}")
 
-        # ===== OB (usa a PP gerada na Etapa PP) =====
+        # ===== OB (usa a PP gerada na Etapa PP, e a conta OB coletada no SEI(1)) =====
         ob = None
         try:
-            ob = executar_ob(context, pp, dados)
+            ob = executar_ob(context, pp, dados["conta_ob"], dados)
         except NotImplementedError as erro:
             print(f"⚠️  Pulando etapa OB: {erro}")
 

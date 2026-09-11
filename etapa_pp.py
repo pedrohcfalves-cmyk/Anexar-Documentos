@@ -68,16 +68,32 @@ def executar_pp(context, nl: str, ce: str, conta_pp: str, dados: dict = None) ->
     nova_pagina1.locator("#btnConfirmar").click()
     nova_pagina1.locator("#divdtgGerarOrdemCronologica td.GridLink").first.click()
 
+    for pagina_temp in (nova_pagina1, nova_pagina):
+        try:
+            pagina_temp.close()
+        except Exception:
+            pass
+
     aba_sigef.bring_to_front()
     aba_sigef.wait_for_load_state("networkidle")
 
     aba_sigef.wait_for_selector("#cboTipoOrdemBancaria", state="visible", timeout=5000)
 
+    # O <select> #cboTipoOrdemBancaria dispara um postback (onchange) que
+    # re-renderiza esse trecho do formulário -- por isso ele TEM que ser
+    # selecionado ANTES de preencher banco/agência/conta. Se preencher
+    # antes, o postback do select limpa esses campos de novo (é o que
+    # causa os valores sumirem sozinhos logo depois de digitados).
+    aba_sigef.locator("#cboTipoOrdemBancaria").select_option(value="3")
+    aba_sigef.wait_for_load_state("networkidle")
+
     aba_sigef.locator("#txtBanco").fill("001")
     aba_sigef.locator("#txtAgencia").fill("27570")
     aba_sigef.locator("#txtConta_SIGEFPesquisa").fill(conta_pp)
-    aba_sigef.locator("#cboTipoOrdemBancaria").select_option(value="3")
+
+    aba_sigef.wait_for_selector("#txtConta_SIGEFPesquisa", state="visible", timeout=5000)
     aba_sigef.locator("#btnRetencoes").click()
+    aba_sigef.wait_for_load_state("networkidle")
     aba_sigef.locator("img[src*='aba_confirmacao.gif']").click()
 
     aba_sigef.locator("#btnConfirmar").click()

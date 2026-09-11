@@ -35,27 +35,59 @@ PASTA_BASE = r"C:\Users\04789010201\Downloads\Anexar Documentos"
 CAMINHO_SESSAO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sessao_atual.json")
 
 
-def conectar_chrome(porta: int = 9222, timeout_ms: int = 15000):
+def conectar_chrome(porta: int = 9222, timeout_ms: int = 60000):
     """
     Conecta ao Chrome aberto em modo de depuração (CDP) e retorna o
     objeto playwright (para poder chamar .stop() no final), o browser e o
     primeiro contexto disponível.
 
     Lança Exception com instruções caso o Chrome não esteja aberto na
-    porta de depuração. Por padrão desiste depois de 15s (em vez do
+    porta de depuração. Por padrão desiste depois de 60s (em vez do
     padrão do Playwright, que pode levar minutos) pra não parecer que o
     script travou quando o Chrome simplesmente não está aberto.
+
+    Existem dois motivos bem diferentes pra essa conexão falhar, e o
+    tratamento abaixo distingue os dois:
+      1) O Chrome nem está aberto na porta de depuração -> a conexão
+         websocket nunca chega a abrir ("<ws connecting>" sem
+         "<ws connected>" no log do erro).
+      2) O Chrome está aberto e a conexão websocket abre normalmente
+         ("<ws connected>" aparece no log), mas ele demora demais pra
+         responder ao protocolo CDP. Nesse caso o Chrome ESTÁ em modo de
+         depuração, só está demorando -- use o Chrome aberto pelo
+         abrir_chrome_automacao.bat (perfil dedicado, sem as suas abas
+         de navegação normal) em vez do seu Chrome do dia a dia, que
+         costuma resolver isso.
     """
     playwright = sync_playwright().start()
     try:
         browser = playwright.chromium.connect_over_cdp(
             f"http://127.0.0.1:{porta}", timeout=timeout_ms
         )
+    except PlaywrightTimeoutError as erro:
+        playwright.stop()
+        if "<ws connected>" in str(erro):
+            raise Exception(
+                "O Chrome está em modo de depuração e a conexão abriu, "
+                f"mas ele demorou mais de {timeout_ms // 1000}s pra "
+                "responder ao protocolo do navegador.\n"
+                "Feche esse Chrome e abra o dedicado pra automação com "
+                "2 cliques em abrir_chrome_automacao.bat (na pasta do "
+                "projeto), depois rode de novo."
+            )
+        raise Exception(
+            "Chrome em modo de depuração não encontrado.\n"
+            "Dê 2 cliques em abrir_chrome_automacao.bat (na pasta do "
+            "projeto), ou abra manualmente com:\n"
+            "\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" "
+            f"--remote-debugging-port={porta}"
+        )
     except Exception:
         playwright.stop()
         raise Exception(
             "Chrome em modo de depuração não encontrado.\n"
-            "Abra o Chrome com:\n"
+            "Dê 2 cliques em abrir_chrome_automacao.bat (na pasta do "
+            "projeto), ou abra manualmente com:\n"
             "\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" "
             f"--remote-debugging-port={porta}"
         )
