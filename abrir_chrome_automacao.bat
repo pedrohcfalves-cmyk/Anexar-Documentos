@@ -13,4 +13,8 @@ REM Uso: da um duplo-clique nesse arquivo ANTES de rodar qualquer
 REM etapa_*.py (ou o main.py). Pode deixar seu Chrome normal aberto do
 REM lado -- sao processos totalmente separados.
 
-start "" "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:\ChromeAutomacao"
+REM --remote-allow-origins=* evita que o Chrome aceite a conexao mas
+REM trave sem responder ao protocolo (erro "<ws connected>" seguido de
+REM timeout) -- protecao de origem que o Chrome passou a aplicar no
+REM DevTools Protocol nas versoes mais recentes.
+start "" "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:\ChromeAutomacao" --remote-allow-origins=*

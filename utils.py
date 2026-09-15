@@ -184,6 +184,83 @@ def salvar_sessao(**novos_valores) -> None:
         json.dump(sessao, arquivo, ensure_ascii=False, indent=2)
 
 
+def normalizar(valor) -> float:
+    """
+    Converte qualquer um dos formatos de valor que aparecem no projeto
+    pra um float em reais, pra dar pra comparar dois valores direto:
+
+    79054      (valor_padronizado, sem vírgula)                    -> 790.54
+    790,54     (como aparece formatado no SIGEF)                   -> 790.54
+    1.234,56   (como aparece formatado no SIGEF, com milhar)       -> 1234.56
+    """
+    valor = str(valor).replace("R$", "").strip()
+
+    # valor_padronizado (só dígitos, ex: "876675" pra R$ 8.766,75)
+    if valor.isdigit():
+        return float(valor) / 100
+
+    # Valor formatado como aparece no SIGEF (ex: "8.766,75")
+    return float(valor.replace(".", "").replace(",", "."))
+
+
+def padronizar_mes(mes) -> str:
+    """
+    Aceita o mês de referência digitado em qualquer formato ("1", "01",
+    "9", "12" etc.) e sempre devolve SEM zero à esquerda (ex: "1", "9",
+    "12") -- é esse o formato que o <option value="..."> do combo do
+    SIGEF (#cboMesComp) usa; um "0" na frente (ex: "09") faz o
+    select_option não achar a opção e travar num timeout, por isso
+    digitar "09" precisa virar "9" antes de preencher o combo.
+
+    Lança ValueError se não for um número de 1 a 12.
+    """
+    texto = str(mes).strip()
+    if not texto.isdigit():
+        raise ValueError(f"Mês de referência inválido: '{mes}' (digite um número de 1 a 12).")
+    numero = int(texto)
+    if not 1 <= numero <= 12:
+        raise ValueError(f"Mês de referência fora do intervalo 1-12: '{mes}'.")
+    return str(numero)
+
+
+def padronizar_valor(valor) -> tuple[str, str]:
+    """
+    Aceita um valor em reais digitado em qualquer um dos formatos usados
+    no projeto:
+
+        "1.105,50"   (formatado, com separador de milhar e centavos)
+        "1105,50"    (formatado, sem separador de milhar)
+        "1105,5"     (formatado, só 1 casa decimal)
+        "110550"     (só dígitos -- os 2 últimos são os centavos)
+
+    e devolve os DOIS formatos usados no projeto, já padronizados, pra
+    que esses jeitos diferentes de digitar o MESMO valor sempre virem
+    exatamente o mesmo resultado dali em diante:
+
+        valor_padronizado -> só dígitos, 2 últimos = centavos (ex: "110550")
+        valor_formatado   -> formatado em R$ (ex: "1.105,50"), pra mostrar
+                             na tela e salvar como "valor" do lançamento
+
+    Lança ValueError se o texto não puder ser interpretado como valor.
+    """
+    texto = str(valor).replace("R$", "").strip()
+    if not texto:
+        raise ValueError("Valor em branco.")
+
+    if texto.isdigit():
+        centavos = int(texto)
+    else:
+        try:
+            centavos = round(float(texto.replace(".", "").replace(",", ".")) * 100)
+        except ValueError:
+            raise ValueError(f"Valor inválido: '{valor}' (ex: 1.105,50).")
+
+    reais, cent = divmod(centavos, 100)
+    valor_padronizado = str(centavos)
+    valor_formatado = f"{reais:,}".replace(",", ".") + f",{cent:02d}"
+    return valor_padronizado, valor_formatado
+
+
 def perguntar_ou_reusar(mensagem: str, chave: str, sessao: dict) -> str:
     """
     Pergunta um valor ao usuário, oferecendo o valor salvo na sessão (se
