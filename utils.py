@@ -20,6 +20,21 @@ URL_SIGEF_OB = "http://sigefhom.sefin.ro.gov.br/SIGEF2026/FIN/FINManterOrdemBanc
 
 URL_SIGEF_LISTAR_DESPESA_CERTIFICADA = "http://sigefhom.sefin.ro.gov.br/SIGEF2026/FIN/FINListarDespesaCertificada.aspx?CdTransacao=122"
 
+# ATENÇÃO: esse domínio NÃO tem o "hom" (homologação) que todas as
+# outras URLs acima têm -- ou seja, aponta pro SIGEF de PRODUÇÃO, não
+# pro ambiente de teste. Confirmar se é isso mesmo antes de rodar
+# qualquer automação real aqui (ver conversa sobre a Etapa Anexar
+# Documento, em etapa_anexar.py).
+URL_SIGEF_LISTAR_PP = "http://sigef.sefin.ro.gov.br/SIGEF2026/FIN/FINListarPreparacaoPagamento.aspx?CdTransacao=177"
+
+# ⚠️ AINDA NÃO CONFIRMADA -- diferente das URLs acima (que já foram
+# testadas ao vivo), essa aqui é um placeholder. Preencher com a URL real
+# da tela "Listar Ordem Bancária" do SIGEF (mesmo jeito que
+# URL_SIGEF_LISTAR_PP foi preenchida) assim que for testar
+# etapa_baixar_ob.py. Enquanto estiver vazia, executar_baixar_ob() recusa
+# rodar em vez de tentar navegar pra uma URL errada.
+URL_SIGEF_LISTAR_OB = ""
+
 URL_SEI = (
     "https://sei.sistemas.ro.gov.br/sei/controlador.php?"
     "acao=procedimento_controlar&reset=1&infra_sistema=100000100"
