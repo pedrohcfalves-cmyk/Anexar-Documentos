@@ -4,27 +4,29 @@ SEI/SIGEF (SEI(1) -> CE -> NL -> PP -> OB -> SEI(2)).
 """
 import json
 import os
+import subprocess
+import time
 
 import pymupdf
 from playwright.sync_api import Page, sync_playwright, TimeoutError as PlaywrightTimeoutError
 
 # ===== URLs dos sistemas =====
 
-URL_SIGEF = "http://sigefhom.sefin.ro.gov.br/SIGEF2026/FIN/FINManterDespesaCertificada.aspx?CdTransacao=121"
+# ⚠️ Todas as URLs do SIGEF abaixo apontam pro ambiente de PRODUÇÃO
+# (sigef.sefin.ro.gov.br, sem o "hom" de homologação) -- ou seja, essa
+# automação mexe no sistema REAL (CE/NL/PP/OB gerados aqui valem de
+# verdade). Pra voltar a testar sem afetar dados reais, troque o
+# domínio de volta pra "sigefhom.sefin.ro.gov.br" nas constantes abaixo.
+URL_SIGEF = "http://sigef.sefin.ro.gov.br/SIGEF2026/FIN/FINManterDespesaCertificada.aspx?CdTransacao=121"
 
-URL_SIGEF_NL = "http://sigefhom.sefin.ro.gov.br/SIGEF2026/FIN/FINLiquidarDespesaCertificada.aspx?CdTransacao=160"
+URL_SIGEF_NL = "http://sigef.sefin.ro.gov.br/SIGEF2026/FIN/FINLiquidarDespesaCertificada.aspx?CdTransacao=160"
 
-URL_SIGEF_PP = "http://sigefhom.sefin.ro.gov.br/SIGEF2026/FIN/FINPreparacaoPagamentoDespesaEmpenhada.aspx?CdTransacao=250"
+URL_SIGEF_PP = "http://sigef.sefin.ro.gov.br/SIGEF2026/FIN/FINPreparacaoPagamentoDespesaEmpenhada.aspx?CdTransacao=250"
 
-URL_SIGEF_OB = "http://sigefhom.sefin.ro.gov.br/SIGEF2026/FIN/FINManterOrdemBancaria.aspx?CdTransacao=214"
+URL_SIGEF_OB = "http://sigef.sefin.ro.gov.br/SIGEF2026/FIN/FINManterOrdemBancaria.aspx?CdTransacao=214"
 
-URL_SIGEF_LISTAR_DESPESA_CERTIFICADA = "http://sigefhom.sefin.ro.gov.br/SIGEF2026/FIN/FINListarDespesaCertificada.aspx?CdTransacao=122"
+URL_SIGEF_LISTAR_DESPESA_CERTIFICADA = "http://sigef.sefin.ro.gov.br/SIGEF2026/FIN/FINListarDespesaCertificada.aspx?CdTransacao=122"
 
-# ATENÇÃO: esse domínio NÃO tem o "hom" (homologação) que todas as
-# outras URLs acima têm -- ou seja, aponta pro SIGEF de PRODUÇÃO, não
-# pro ambiente de teste. Confirmar se é isso mesmo antes de rodar
-# qualquer automação real aqui (ver conversa sobre a Etapa Anexar
-# Documento, em etapa_anexar.py).
 URL_SIGEF_LISTAR_PP = "http://sigef.sefin.ro.gov.br/SIGEF2026/FIN/FINListarPreparacaoPagamento.aspx?CdTransacao=177"
 
 # ⚠️ AINDA NÃO CONFIRMADA -- diferente das URLs acima (que já foram
@@ -49,6 +51,39 @@ PASTA_BASE = r"C:\Users\04789010201\Downloads\Anexar Documentos"
 # vez que for testar uma etapa separada. Fica na mesma pasta do projeto.
 CAMINHO_SESSAO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sessao_atual.json")
 
+# ===== Chrome dedicado à automação (mesmos parâmetros do
+# abrir_chrome_automacao.bat) =====
+
+CAMINHO_CHROME_EXECUTAVEL = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+
+# Perfil PRÓPRIO desse Chrome, separado do Chrome do dia a dia -- fica
+# com o login do SEI/SIGEF salvo entre execuções, sem nenhuma das suas
+# outras abas (GitHub, planilhas, portal etc.).
+PASTA_PERFIL_CHROME_AUTOMACAO = r"C:\ChromeAutomacao"
+
+
+def _abrir_chrome_debug(porta: int) -> None:
+    """
+    Abre o Chrome dedicado à automação em segundo plano, com os mesmos
+    parâmetros do abrir_chrome_automacao.bat: perfil próprio
+    (PASTA_PERFIL_CHROME_AUTOMACAO, sem as abas do Chrome do dia a dia)
+    e --remote-allow-origins=*, que evita o Chrome aceitar a conexão mas
+    travar sem responder ao protocolo (erro "<ws connected>" seguido de
+    timeout) -- proteção de origem que as versões mais recentes do
+    Chrome passaram a aplicar no DevTools Protocol.
+
+    Não espera o Chrome terminar de abrir -- quem chamou (conectar_chrome)
+    é responsável por tentar conectar de novo depois de um tempo.
+    """
+    subprocess.Popen(
+        [
+            CAMINHO_CHROME_EXECUTAVEL,
+            f"--remote-debugging-port={porta}",
+            f"--user-data-dir={PASTA_PERFIL_CHROME_AUTOMACAO}",
+            "--remote-allow-origins=*",
+        ]
+    )
+
 
 def conectar_chrome(porta: int = 9222, timeout_ms: int = 60000):
     """
@@ -56,57 +91,76 @@ def conectar_chrome(porta: int = 9222, timeout_ms: int = 60000):
     objeto playwright (para poder chamar .stop() no final), o browser e o
     primeiro contexto disponível.
 
-    Lança Exception com instruções caso o Chrome não esteja aberto na
-    porta de depuração. Por padrão desiste depois de 60s (em vez do
-    padrão do Playwright, que pode levar minutos) pra não parecer que o
-    script travou quando o Chrome simplesmente não está aberto.
+    Se ninguém estiver escutando na porta de depuração, abre
+    automaticamente o Chrome dedicado à automação (_abrir_chrome_debug,
+    mesmo efeito de dar 2 cliques em abrir_chrome_automacao.bat) e tenta
+    conectar de novo antes de desistir -- não é mais preciso abrir esse
+    Chrome manualmente antes de rodar a automação.
+
+    Por padrão desiste depois de 60s em cada tentativa (em vez do padrão
+    do Playwright, que pode levar minutos) pra não parecer que o script
+    travou.
 
     Existem dois motivos bem diferentes pra essa conexão falhar, e o
     tratamento abaixo distingue os dois:
       1) O Chrome nem está aberto na porta de depuração -> a conexão
          websocket nunca chega a abrir ("<ws connecting>" sem
-         "<ws connected>" no log do erro).
+         "<ws connected>" no log do erro). Esse é o caso tratado
+         automaticamente: abre o Chrome dedicado e tenta de novo.
       2) O Chrome está aberto e a conexão websocket abre normalmente
          ("<ws connected>" aparece no log), mas ele demora demais pra
-         responder ao protocolo CDP. Nesse caso o Chrome ESTÁ em modo de
-         depuração, só está demorando -- use o Chrome aberto pelo
-         abrir_chrome_automacao.bat (perfil dedicado, sem as suas abas
-         de navegação normal) em vez do seu Chrome do dia a dia, que
-         costuma resolver isso.
+         responder ao protocolo CDP. Nesse caso o Chrome JÁ ESTÁ em modo
+         de depuração (provavelmente o do dia a dia, com muitas abas, em
+         vez do dedicado) -- abrir outro Chrome não resolve, então só
+         avisa o usuário em vez de tentar de novo.
     """
     playwright = sync_playwright().start()
-    try:
-        browser = playwright.chromium.connect_over_cdp(
-            f"http://127.0.0.1:{porta}", timeout=timeout_ms
-        )
-    except PlaywrightTimeoutError as erro:
-        playwright.stop()
-        if "<ws connected>" in str(erro):
-            raise Exception(
-                "O Chrome está em modo de depuração e a conexão abriu, "
-                f"mas ele demorou mais de {timeout_ms // 1000}s pra "
-                "responder ao protocolo do navegador.\n"
-                "Feche esse Chrome e abra o dedicado pra automação com "
-                "2 cliques em abrir_chrome_automacao.bat (na pasta do "
-                "projeto), depois rode de novo."
+
+    tentou_abrir_automaticamente = False
+    while True:
+        try:
+            browser = playwright.chromium.connect_over_cdp(
+                f"http://127.0.0.1:{porta}", timeout=timeout_ms
             )
-        raise Exception(
-            "Chrome em modo de depuração não encontrado.\n"
-            "Dê 2 cliques em abrir_chrome_automacao.bat (na pasta do "
-            "projeto), ou abra manualmente com:\n"
-            "\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" "
-            f"--remote-debugging-port={porta}"
-        )
-    except Exception:
-        playwright.stop()
-        raise Exception(
-            "Chrome em modo de depuração não encontrado.\n"
-            "Dê 2 cliques em abrir_chrome_automacao.bat (na pasta do "
-            "projeto), ou abra manualmente com:\n"
-            "\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" "
-            f"--remote-debugging-port={porta}"
-        )
-    return playwright, browser, browser.contexts[0]
+            return playwright, browser, browser.contexts[0]
+        except PlaywrightTimeoutError as erro:
+            playwright.stop()
+            if "<ws connected>" in str(erro):
+                raise Exception(
+                    "O Chrome está em modo de depuração e a conexão abriu, "
+                    f"mas ele demorou mais de {timeout_ms // 1000}s pra "
+                    "responder ao protocolo do navegador.\n"
+                    "Feche esse Chrome (pode ser o seu do dia a dia) e "
+                    "rode de novo -- a automação abre um Chrome dedicado "
+                    "sozinha."
+                ) from erro
+            raise Exception(
+                f"Abri o Chrome de depuração automaticamente, mas ele não "
+                f"respondeu em até {timeout_ms // 1000}s.\n"
+                "Feche qualquer Chrome que tenha aberto na tela e rode de "
+                "novo."
+            ) from erro
+        except Exception as erro:
+            if tentou_abrir_automaticamente:
+                playwright.stop()
+                raise Exception(
+                    "Não consegui conectar ao Chrome de depuração, mesmo "
+                    "depois de tentar abri-lo automaticamente.\n"
+                    f"Confira se o Chrome está instalado em "
+                    f"'{CAMINHO_CHROME_EXECUTAVEL}', ou abra manualmente com:\n"
+                    f"\"{CAMINHO_CHROME_EXECUTAVEL}\" "
+                    f"--remote-debugging-port={porta}"
+                ) from erro
+
+            print(
+                f"🌐 Chrome de depuração não encontrado na porta {porta} -- "
+                "abrindo automaticamente..."
+            )
+            _abrir_chrome_debug(porta)
+            tentou_abrir_automaticamente = True
+            # Dá um tempo pro Chrome terminar de abrir e começar a
+            # escutar a porta de depuração antes de tentar de novo.
+            time.sleep(3)
 
 
 def nome_pasta_valido(nome: str) -> str:

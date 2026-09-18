@@ -87,7 +87,7 @@ def executar_ce(context, processo: str, dados: dict) -> str:
     """
     aba_sigef = obter_ou_criar_aba(
         context,
-        dominio="sigefhom.sefin.ro.gov.br",
+        dominio="sigef.sefin.ro.gov.br",
         url_navegacao=URL_SIGEF,
         trecho_pagina="FINManterDespesaCertificada",
     )

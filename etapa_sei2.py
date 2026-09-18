@@ -870,6 +870,19 @@ def executar_sei2(context, processo: str, arquivos: list[str] = None):
     pagina_editor_ob.close()
     aba_sei.bring_to_front()
 
+    # Pausa a automação aqui de propósito -- antes de devolver o
+    # controle pra quem chamou (que reinicia o loop lá na Etapa SEI (1)
+    # pro próximo processo), dá espaço pro usuário fazer o que precisar
+    # manualmente nesse processo (ex: assinar documento, colocar em
+    # bloco de assinatura etc.) enquanto a página ainda está aberta e
+    # com todos os documentos já anexados.
+    input(
+        "\nEtapa SEI (2) concluída (CE, NL, PP e OB anexados) para o "
+        "processo "
+        f"'{processo}'. Faça o que for preciso nessa tela do SEI agora "
+        "e pressione Enter aqui para continuar...\n"
+    )
+
     return aba_sei
 
 

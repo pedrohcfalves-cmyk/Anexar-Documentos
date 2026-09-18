@@ -128,7 +128,7 @@ def executar_nl_lote(context, ce: str, lancamentos: list[dict], dados: dict = No
     """
     aba_sigef = obter_ou_criar_aba(
         context,
-        dominio="sigefhom.sefin.ro.gov.br",
+        dominio="sigef.sefin.ro.gov.br",
         url_navegacao=URL_SIGEF_NL,
     )
     aba_sigef.goto(URL_SIGEF_NL)

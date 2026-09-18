@@ -9,6 +9,12 @@ REM Na primeira vez voce vai precisar logar de novo no SEI e no SIGEF
 REM nessa janela. Depois disso o login fica salvo nessa pasta e voce
 REM nao precisa refazer.
 REM
+REM OPCIONAL: o main.py agora abre esse mesmo Chrome sozinho, automa-
+REM ticamente, se ele ainda nao estiver aberto quando voce rodar
+REM "python main.py" -- entao normalmente nao precisa mais rodar este
+REM arquivo antes. Ele continua aqui como atalho manual (por exemplo,
+REM pra abrir o Chrome e logar ANTES de rodar o main.py, sem esperar).
+REM
 REM Uso: da um duplo-clique nesse arquivo ANTES de rodar qualquer
 REM etapa_*.py (ou o main.py). Pode deixar seu Chrome normal aberto do
 REM lado -- sao processos totalmente separados.

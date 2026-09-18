@@ -127,7 +127,7 @@ def executar_pp_lote(context, ce: str, lancamentos: list[dict], conta_pp: str, d
     """
     aba_sigef = obter_ou_criar_aba(
         context,
-        dominio="sigefhom.sefin.ro.gov.br",
+        dominio="sigef.sefin.ro.gov.br",
         url_navegacao=URL_SIGEF_PP,
     )
     aba_sigef.goto(URL_SIGEF_PP)
